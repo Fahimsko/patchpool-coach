@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PatchPool Coach — Know your pool, own the patch.</title>
+  <meta name="description" content="A Chrome extension that tells League of Legends players how each new patch personally affects their ranked champion pool." />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #080c14;
+      --surface:  #0f1623;
+      --border:   #1e2a3a;
+      --violet:   #7c3aed;
+      --violet-lt:#a78bfa;
+      --gold:     #c99b3a;
+      --text:     #e2e8f0;
+      --muted:    #64748b;
+      --green:    #10b981;
+      --red:      #ef4444;
+      --amber:    #f59e0b;
+      --blue:     #3b82f6;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      line-height: 1.6;
+    }
+
+    a { color: var(--violet-lt); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* ── Nav ── */
+    nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1rem 2rem;
+      border-bottom: 1px solid var(--border);
+      background: rgba(8,12,20,0.9);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      backdrop-filter: blur(8px);
+    }
+    .nav-brand { display: flex; align-items: center; gap: 0.6rem; font-weight: 700; font-size: 1rem; }
+    .nav-brand .dot {
+      width: 28px; height: 28px; border-radius: 7px;
+      background: linear-gradient(135deg, #7c3aed, #4c1d95);
+      border: 1.5px solid var(--gold);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px; font-weight: 900; color: #fff;
+    }
+    .nav-disclaimer {
+      font-size: 0.7rem;
+      color: var(--muted);
+    }
+
+    /* ── Hero ── */
+    .hero {
+      text-align: center;
+      padding: 5rem 1.5rem 4rem;
+      background:
+        linear-gradient(180deg, rgba(124,58,237,0.08) 0%, transparent 60%),
+        radial-gradient(ellipse 70% 40% at 50% 0%, rgba(124,58,237,0.12) 0%, transparent 70%);
+    }
+    .hero-eyebrow {
+      display: inline-block;
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--gold);
+      border: 1px solid rgba(201,155,58,0.3);
+      padding: 0.25rem 0.75rem;
+      border-radius: 999px;
+      margin-bottom: 1.25rem;
+    }
+    .hero h1 {
+      font-size: clamp(2rem, 5vw, 3.25rem);
+      font-weight: 800;
+      line-height: 1.15;
+      letter-spacing: -0.02em;
+      margin-bottom: 1.25rem;
+    }
+    .hero h1 span { color: var(--violet-lt); }
+    .hero p {
+      max-width: 560px;
+      margin: 0 auto 2rem;
+      color: #94a3b8;
+      font-size: 1.05rem;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.75rem 1.75rem;
+      border-radius: 0.6rem;
+      font-weight: 600;
+      font-size: 0.9rem;
+      cursor: pointer;
+      border: none;
+      transition: opacity 0.15s;
+    }
+    .btn:hover { opacity: 0.85; text-decoration: none; }
+    .btn-primary { background: var(--violet); color: #fff; }
+    .btn-secondary {
+      background: transparent;
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .hero-cta { display: flex; gap: 0.75rem; justify-content: center; flex-wrap: wrap; }
+    .coming-soon { font-size: 0.75rem; color: var(--muted); margin-top: 0.75rem; }
+
+    /* ── How it works ── */
+    section { padding: 4rem 1.5rem; max-width: 900px; margin: 0 auto; }
+    h2 {
+      font-size: 1.6rem;
+      font-weight: 700;
+      text-align: center;
+      margin-bottom: 0.5rem;
+    }
+    .section-sub {
+      text-align: center;
+      color: var(--muted);
+      margin-bottom: 2.5rem;
+      font-size: 0.95rem;
+    }
+
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1.25rem;
+    }
+    .step {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 0.85rem;
+      padding: 1.5rem;
+    }
+    .step-num {
+      width: 32px; height: 32px;
+      border-radius: 50%;
+      background: rgba(124,58,237,0.2);
+      border: 1px solid rgba(124,58,237,0.4);
+      color: var(--violet-lt);
+      font-weight: 700;
+      font-size: 0.85rem;
+      display: flex; align-items: center; justify-content: center;
+      margin-bottom: 0.85rem;
+    }
+    .step h3 { font-size: 0.95rem; font-weight: 600; margin-bottom: 0.4rem; }
+    .step p { font-size: 0.82rem; color: var(--muted); line-height: 1.55; }
+
+    /* ── Categories ── */
+    .cats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 0.75rem;
+    }
+    .cat {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      padding: 1rem 1.25rem;
+      border-left: 3px solid;
+    }
+    .cat h4 { font-size: 0.82rem; font-weight: 700; margin-bottom: 0.3rem; }
+    .cat p  { font-size: 0.75rem; color: var(--muted); line-height: 1.45; }
+    .keep   { border-color: var(--green);  } .keep h4  { color: var(--green);  }
+    .practice{ border-color: var(--blue);  } .practice h4 { color: var(--blue); }
+    .risky  { border-color: var(--amber);  } .risky h4 { color: var(--amber);  }
+    .drop   { border-color: var(--red);    } .drop h4  { color: var(--red);    }
+    .nodata { border-color: var(--muted);  } .nodata h4{ color: var(--muted);  }
+
+    /* ── APIs ── */
+    .api-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+    }
+    .api-table th {
+      text-align: left;
+      color: var(--muted);
+      font-weight: 600;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      padding: 0.5rem 0.75rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .api-table td {
+      padding: 0.75rem;
+      border-bottom: 1px solid rgba(30,42,58,0.5);
+      vertical-align: top;
+    }
+    .api-table tr:last-child td { border-bottom: none; }
+    .api-table td:first-child { color: var(--violet-lt); font-family: monospace; }
+    .api-table td:last-child  { color: var(--muted); }
+    .api-wrap {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 0.85rem;
+      overflow: hidden;
+    }
+
+    /* ── Security note ── */
+    .security {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--gold);
+      border-radius: 0.85rem;
+      padding: 1.25rem 1.5rem;
+      display: flex;
+      gap: 1rem;
+      align-items: flex-start;
+    }
+    .security-icon { font-size: 1.4rem; flex-shrink: 0; }
+    .security h4 { font-size: 0.9rem; font-weight: 600; margin-bottom: 0.35rem; color: var(--gold); }
+    .security p  { font-size: 0.82rem; color: var(--muted); line-height: 1.55; }
+
+    /* ── Footer ── */
+    footer {
+      text-align: center;
+      padding: 2.5rem 1rem;
+      font-size: 0.75rem;
+      color: var(--muted);
+      border-top: 1px solid var(--border);
+    }
+
+    .divider {
+      height: 1px;
+      background: var(--border);
+      max-width: 900px;
+      margin: 0 auto;
+    }
+  </style>
+</head>
+<body>
+
+  <nav>
+    <div class="nav-brand">
+      <div class="dot">P</div>
+      PatchPool Coach
+    </div>
+    <span class="nav-disclaimer">Not affiliated with Riot Games</span>
+  </nav>
+
+  <!-- Hero -->
+  <div class="hero">
+    <div class="hero-eyebrow">Chrome Extension · League of Legends</div>
+    <h1>Know your pool.<br /><span>Own the patch.</span></h1>
+    <p>
+      After every League of Legends patch, PatchPool Coach tells you exactly which
+      champions in your ranked pool you should keep playing, practice more, or bench —
+      based on your own stats and the latest patch changes.
+    </p>
+    <div class="hero-cta">
+      <a class="btn btn-primary" href="#">Add to Chrome</a>
+      <a class="btn btn-secondary" href="https://github.com/Fahimsko/patchpool-coach" target="_blank">GitHub</a>
+    </div>
+    <p class="coming-soon">Chrome Web Store listing coming soon.</p>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- How it works -->
+  <section>
+    <h2>How it works</h2>
+    <p class="section-sub">Three steps from patch day to ranked confidence.</p>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <h3>Connect your account</h3>
+        <p>Enter your Riot ID. PatchPool Coach fetches your recent ranked solo/duo match history using the official Riot API.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <h3>Analyse your pool</h3>
+        <p>Win rate, KDA, games played, and champion mastery are aggregated per champion across your last 10–50 ranked games.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <h3>Get your recommendations</h3>
+        <p>Each champion receives a personal impact score and a clear recommendation, updated every patch.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <h3>Patch alerts</h3>
+        <p>Enable notifications and get a Chrome alert the moment a new patch drops that buffs or nerfs a champion in your pool.</p>
+      </div>
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <!-- Recommendations -->
+  <section>
+    <h2>Recommendation categories</h2>
+    <p class="section-sub">Every champion in your pool gets one of five verdicts.</p>
+    <div class="cats">
+      <div class="cat keep">
+        <h4>Keep Playing</h4>
+        <p>Strong personal stats and no harmful patch changes. Your safest ranked pick.</p>
+      </div>
+      <div class="cat practice">
+        <h4>Practice More</h4>
+        <p>Solid experience but win rate has room to grow. Ranked-ready with more focused reps.</p>
+      </div>
+      <div class="cat risky">
+        <h4>Risky This Patch</h4>
+        <p>A significant nerf or borderline stats make this a volatile ranked pick right now.</p>
+      </div>
+      <div class="cat drop">
+        <h4>Drop For Now</h4>
+        <p>Underperforming stats and no patch buff to rescue it. Bench it this patch.</p>
+      </div>
+      <div class="cat nodata">
+        <h4>Not Enough Data</h4>
+        <p>Fewer than 3 ranked games on record. Build a sample in normals first.</p>
+      </div>
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <!-- API usage -->
+  <section>
+    <h2>Riot API usage</h2>
+    <p class="section-sub">PatchPool Coach uses only official, documented Riot API endpoints.</p>
+    <div class="api-wrap">
+      <table class="api-table">
+        <thead>
+          <tr>
+            <th>Endpoint</th>
+            <th>Purpose</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Account v1</td>
+            <td>Resolve Riot ID (game name + tagline) to a PUUID</td>
+          </tr>
+          <tr>
+            <td>Match v5</td>
+            <td>Fetch ranked solo/duo match history (queue 420) and per-game stats</td>
+          </tr>
+          <tr>
+            <td>Champion Mastery v4</td>
+            <td>Fetch mastery points and mastery level per champion</td>
+          </tr>
+          <tr>
+            <td>Data Dragon (CDN)</td>
+            <td>Fetch champion metadata and current game version</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <br />
+
+    <div class="security">
+      <div class="security-icon">🔒</div>
+      <div>
+        <h4>API key security</h4>
+        <p>
+          All Riot API calls are made exclusively from a server-side backend proxy.
+          The API key is stored only on the server and is never transmitted to or stored
+          inside the browser extension. Users' match data is fetched on demand and never persisted on our servers.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <p>PatchPool Coach is not endorsed by Riot Games and is not affiliated with or sponsored by Riot Games.</p>
+    <p style="margin-top:0.4rem;">League of Legends is a trademark of Riot Games, Inc.</p>
+  </footer>
+
+</body>
+</html>
